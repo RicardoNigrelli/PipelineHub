@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PipelineHub.Api/PipelineHub.Api.csproj" />
+    <Project Path="src/PipelineHub.Application/PipelineHub.Application.csproj" />
+    <Project Path="src/PipelineHub.Domain/PipelineHub.Domain.csproj" />
+    <Project Path="src/PipelineHub.Infrastructure/PipelineHub.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PipelineHub.IntegrationTests/PipelineHub.IntegrationTests.csproj" />
+    <Project Path="tests/PipelineHub.UnitTests/PipelineHub.UnitTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: pipelinehub-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pipelinehub
+      POSTGRES_PASSWORD: pipelinehub_dev_only
+      POSTGRES_DB: pipelinehub
+    ports:
+      - "15434:5432"
+    volumes:
+      - pipelinehub-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pipelinehub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pipelinehub-db-data:
