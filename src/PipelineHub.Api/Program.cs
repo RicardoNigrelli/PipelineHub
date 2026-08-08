@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using PipelineHub.Application;
 using PipelineHub.Application.Jobs;
 using PipelineHub.Domain;
@@ -27,9 +28,19 @@ try
     // Repo root: two levels up from the Api project directory (src/PipelineHub.Api -> repo root).
     // Holds assets/sample.mp4 for the public demo job. Revisit when this moves into a Docker image (Phase 9).
     var repoRoot = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", ".."));
-    builder.Services.AddInfrastructure(repoRoot);
+    var connectionString = builder.Configuration.GetConnectionString("Default")
+        ?? throw new InvalidOperationException("Missing ConnectionStrings:Default.");
+    builder.Services.AddInfrastructure(repoRoot, connectionString);
 
     var app = builder.Build();
+
+    // Dev convenience: apply pending migrations at startup instead of a separate `dotnet ef database update`
+    // step. Revisit for a real deploy pipeline in Phase 9 — migrating on every boot doesn't belong in prod.
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<PipelineHub.Infrastructure.Persistence.PipelineHubDbContext>();
+        db.Database.Migrate();
+    }
 
     if (app.Environment.IsDevelopment())
     {

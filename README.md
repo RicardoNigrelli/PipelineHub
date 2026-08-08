@@ -9,15 +9,16 @@ This isn't a tutorial clone. It's a real tool: it queues and runs media-processi
 phases) with retries and live progress, instead of the synchronous one-off scripts that
 kick off that kind of work by default.
 
-## Status: Phase 1 — core slice working end to end
+## Status: Phase 2 — persisted end to end with EF Core + Postgres
 
 - `POST /jobs` enqueues a job (validated, 400 on bad input)
-- `GET /jobs/{id}` returns its status
+- `GET /jobs/{id}` returns its status — survives an API restart, backed by Postgres
 - `POST /jobs/enqueue-and-wait` runs synchronously and returns the final result — handy
   for testing before Hangfire (background queueing) lands in Phase 4
 - One real runner ships today: `SampleFfmpegTranscode`, which resizes the repo's own
   `assets/sample.mp4` with ffmpeg — works out of the box on a fresh clone, no external
   dependencies or private data required.
+- EF Core migrations apply automatically on startup in dev (`Database.Migrate()`).
 
 ## Architecture
 
@@ -26,7 +27,7 @@ src/
 ├── PipelineHub.Domain          # Job, JobStatus, JobType — no dependencies
 ├── PipelineHub.Application     # MediatR commands/queries, FluentValidation,
 │                                  IJobRunner / IJobRepository ports
-├── PipelineHub.Infrastructure  # In-memory repository (Phase 1), SampleFfmpegJobRunner
+├── PipelineHub.Infrastructure  # EF Core + Postgres (EfJobRepository), SampleFfmpegJobRunner
 └── PipelineHub.Api             # Minimal API endpoints, Serilog, DI wiring
 ```
 
@@ -36,11 +37,13 @@ gitignored configuration — never committed here.
 
 ## Running locally
 
-Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download) and `ffmpeg` on PATH.
+Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download), `ffmpeg` on PATH, and
+Docker (for Postgres).
 
 ```bash
+docker compose up -d db   # host port 15434, to avoid clashing with other local projects on 5432
 dotnet build
-dotnet run --project src/PipelineHub.Api
+dotnet run --project src/PipelineHub.Api   # applies EF Core migrations on startup
 ```
 
 ```bash
@@ -49,18 +52,18 @@ curl -X POST http://localhost:5299/jobs/enqueue-and-wait \
   -d '{"type":"SampleFfmpegTranscode","parameters":{"width":"160"}}'
 ```
 
-Postgres for the persistence phase (host port `15434`, to avoid clashing with other local
-projects on `5432`):
+Migrations (via the local `dotnet-ef` tool, see `.config/dotnet-tools.json`):
 
 ```bash
-docker compose up -d db
+dotnet tool restore
+dotnet tool run dotnet-ef migrations add <Name> --project src/PipelineHub.Infrastructure --startup-project src/PipelineHub.Api -o Persistence/Migrations
 ```
 
 ## Roadmap
 
 1. ~~Setup: solution, Docker Compose, CI~~
 2. ~~Domain + Application core, in-memory runner~~
-3. Persistence: EF Core + Postgres, job history
+3. ~~Persistence: EF Core + Postgres, job history~~
 4. Background processing: Hangfire (queue, retries)
 5. Real-time: SignalR progress updates
 6. Real adapters: video-lab/reel-lab (local config, not public)

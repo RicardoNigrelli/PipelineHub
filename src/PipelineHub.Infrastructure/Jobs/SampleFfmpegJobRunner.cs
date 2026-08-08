@@ -40,7 +40,8 @@ public sealed class SampleFfmpegJobRunner : IJobRunner
         var startInfo = new ProcessStartInfo
         {
             FileName = "ffmpeg",
-            ArgumentList = { "-y", "-i", inputPath, "-vf", $"scale={width}:-1", outputPath },
+            // -2 (not -1) forces an even height — libx264 rejects odd dimensions.
+            ArgumentList = { "-y", "-i", inputPath, "-vf", $"scale={width}:-2", outputPath },
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
