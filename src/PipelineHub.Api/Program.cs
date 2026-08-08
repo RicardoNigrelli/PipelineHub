@@ -2,6 +2,7 @@ using FluentValidation;
 using Hangfire;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using PipelineHub.Api.Hubs;
 using PipelineHub.Application;
 using PipelineHub.Application.Jobs;
 using PipelineHub.Domain;
@@ -25,6 +26,8 @@ try
     builder.Services.ConfigureHttpJsonOptions(options =>
         options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
     builder.Services.AddApplication();
+    builder.Services.AddSignalR();
+    builder.Services.AddScoped<IJobProgressNotifier, SignalRJobProgressNotifier>();
 
     // Repo root: two levels up from the Api project directory (src/PipelineHub.Api -> repo root).
     // Holds assets/sample.mp4 for the public demo job. Revisit when this moves into a Docker image (Phase 9).
@@ -75,6 +78,8 @@ try
         }
     }));
 
+    app.MapHub<JobsHub>("/hubs/jobs");
+
     app.MapPost("/jobs", async (EnqueueJobRequest request, ISender sender, CancellationToken ct) =>
     {
         var id = await sender.Send(new EnqueueJobCommand(request.Type, request.Parameters ?? new Dictionary<string, string>()), ct);
@@ -93,7 +98,7 @@ try
     {
         // Test/demo convenience only: now that execution is queued via Hangfire (Phase 4),
         // this polls for a terminal status instead of running inline. The real integration
-        // is POST /jobs (returns immediately) + GET /jobs/{id} or, later, SignalR (Phase 5).
+        // is POST /jobs (returns immediately) + the SignalR hub at /hubs/jobs (Phase 5).
         var id = await sender.Send(new EnqueueJobCommand(request.Type, request.Parameters ?? new Dictionary<string, string>()), ct);
 
         JobStatusDto? status = null;

@@ -9,12 +9,16 @@ This isn't a tutorial clone. It's a real tool: it queues and runs media-processi
 phases) with retries and live progress, instead of the synchronous one-off scripts that
 kick off that kind of work by default.
 
-## Status: Phase 4 — queued with Hangfire, real automatic retries
+## Status: Phase 5 — live progress over SignalR, no polling required
 
 - `POST /jobs` enqueues a job and returns immediately (`Queued`) — the caller no longer
   blocks on ffmpeg/whisper/Remotion finishing. Execution runs on a Hangfire worker.
 - `GET /jobs/{id}` returns its status — survives an API restart, backed by Postgres
 - `POST /jobs/enqueue-and-wait` polls for a terminal status (test/demo convenience only)
+- **SignalR hub at `/hubs/jobs`**: clients call `WatchAllJobs` (dashboard view) or
+  `WatchJob(id)` (single job's detail view) and get a `jobUpdated` push on every status
+  transition — Queued → Running → Succeeded/Failed — instead of polling GET. Verified with
+  a real SignalR .NET client: all 3 transitions arrived in 335ms with zero polling.
 - The Hangfire dashboard is at `/hangfire` (dev only, no auth yet — must be locked down
   before any real deploy)
 - **Retries are real, not decorative**: an exception escaping the runner (process failed
@@ -60,6 +64,16 @@ curl -X POST http://localhost:5299/jobs/enqueue-and-wait \
   -d '{"type":"SampleFfmpegTranscode","parameters":{"width":"160"}}'
 ```
 
+Live progress instead of polling — connect to the hub, join the `all-jobs` group, enqueue
+a job, watch it stream:
+
+```csharp
+var connection = new HubConnectionBuilder().WithUrl("http://localhost:5299/hubs/jobs").Build();
+connection.On<object>("jobUpdated", status => Console.WriteLine(status));
+await connection.StartAsync();
+await connection.InvokeAsync("WatchAllJobs");
+```
+
 Migrations (via the local `dotnet-ef` tool, see `.config/dotnet-tools.json`):
 
 ```bash
@@ -73,7 +87,7 @@ dotnet tool run dotnet-ef migrations add <Name> --project src/PipelineHub.Infras
 2. ~~Domain + Application core, in-memory runner~~
 3. ~~Persistence: EF Core + Postgres, job history~~
 4. ~~Background processing: Hangfire (queue, retries)~~
-5. Real-time: SignalR progress updates
+5. ~~Real-time: SignalR progress updates~~
 6. Real adapters: video-lab/reel-lab (local config, not public)
 7. Frontend: React dashboard
 8. Observability: structured logging, health checks, integration tests

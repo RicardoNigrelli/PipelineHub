@@ -13,17 +13,20 @@ public sealed class EnqueueJobCommandHandler : IRequestHandler<EnqueueJobCommand
 {
     private readonly IJobRepository _repository;
     private readonly IBackgroundJobScheduler _scheduler;
+    private readonly IJobProgressNotifier _notifier;
 
-    public EnqueueJobCommandHandler(IJobRepository repository, IBackgroundJobScheduler scheduler)
+    public EnqueueJobCommandHandler(IJobRepository repository, IBackgroundJobScheduler scheduler, IJobProgressNotifier notifier)
     {
         _repository = repository;
         _scheduler = scheduler;
+        _notifier = notifier;
     }
 
     public async Task<Guid> Handle(EnqueueJobCommand request, CancellationToken cancellationToken)
     {
         var job = new Job(Guid.NewGuid(), request.Type, request.Parameters, DateTimeOffset.UtcNow);
         await _repository.AddAsync(job, cancellationToken);
+        await _notifier.NotifyJobUpdatedAsync(JobStatusDto.FromDomain(job), cancellationToken);
 
         _scheduler.ScheduleExecution(job.Id);
 
