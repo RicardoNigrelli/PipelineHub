@@ -9,12 +9,20 @@ This isn't a tutorial clone. It's a real tool: it queues and runs media-processi
 phases) with retries and live progress, instead of the synchronous one-off scripts that
 kick off that kind of work by default.
 
-## Status: Phase 2 — persisted end to end with EF Core + Postgres
+## Status: Phase 4 — queued with Hangfire, real automatic retries
 
-- `POST /jobs` enqueues a job (validated, 400 on bad input)
+- `POST /jobs` enqueues a job and returns immediately (`Queued`) — the caller no longer
+  blocks on ffmpeg/whisper/Remotion finishing. Execution runs on a Hangfire worker.
 - `GET /jobs/{id}` returns its status — survives an API restart, backed by Postgres
-- `POST /jobs/enqueue-and-wait` runs synchronously and returns the final result — handy
-  for testing before Hangfire (background queueing) lands in Phase 4
+- `POST /jobs/enqueue-and-wait` polls for a terminal status (test/demo convenience only)
+- The Hangfire dashboard is at `/hangfire` (dev only, no auth yet — must be locked down
+  before any real deploy)
+- **Retries are real, not decorative**: an exception escaping the runner (process failed
+  to start — missing binary, resource pressure) is treated as transient and retried
+  automatically (3 attempts, exponential backoff); a clean non-zero exit from ffmpeg is
+  treated as a permanent business failure and recorded once, no retry storm. Verified by
+  running the API with ffmpeg removed from PATH and watching Hangfire's own state history
+  in Postgres go Failed → Scheduled (attempt 1/2/3) → Failed.
 - One real runner ships today: `SampleFfmpegTranscode`, which resizes the repo's own
   `assets/sample.mp4` with ffmpeg — works out of the box on a fresh clone, no external
   dependencies or private data required.
@@ -64,7 +72,7 @@ dotnet tool run dotnet-ef migrations add <Name> --project src/PipelineHub.Infras
 1. ~~Setup: solution, Docker Compose, CI~~
 2. ~~Domain + Application core, in-memory runner~~
 3. ~~Persistence: EF Core + Postgres, job history~~
-4. Background processing: Hangfire (queue, retries)
+4. ~~Background processing: Hangfire (queue, retries)~~
 5. Real-time: SignalR progress updates
 6. Real adapters: video-lab/reel-lab (local config, not public)
 7. Frontend: React dashboard

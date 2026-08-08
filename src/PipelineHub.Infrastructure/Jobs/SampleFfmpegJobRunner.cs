@@ -51,17 +51,17 @@ public sealed class SampleFfmpegJobRunner : IJobRunner
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) _logger.LogDebug("ffmpeg stdout: {Line}", e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) _logger.LogDebug("ffmpeg stderr: {Line}", e.Data); };
 
-        try
-        {
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            await process.WaitForExitAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            return new JobRunOutcome(false, null, $"Failed to start ffmpeg: {ex.Message}");
-        }
+        // Deliberately NOT catching here: a failure to even start the process (binary
+        // missing from PATH, no free handles, transient OS resource pressure) is an
+        // infrastructure problem, not a verdict on this job's input — let it propagate so
+        // JobExecutionService (Application) rethrows and Hangfire's AutomaticRetry kicks in.
+        // A clean non-zero exit below, by contrast, is ffmpeg's own considered verdict on
+        // these exact inputs — retrying won't change that, so it's returned as a normal
+        // (failed) outcome instead.
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        await process.WaitForExitAsync(cancellationToken);
 
         if (process.ExitCode != 0)
         {

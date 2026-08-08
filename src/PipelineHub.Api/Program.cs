@@ -1,4 +1,5 @@
 using FluentValidation;
+using Hangfire;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using PipelineHub.Application;
@@ -45,6 +46,8 @@ try
     if (app.Environment.IsDevelopment())
     {
         app.MapOpenApi();
+        // No auth in front of this yet — fine for local dev, must be locked down before Phase 9 deploy.
+        app.MapHangfireDashboard("/hangfire");
     }
 
     app.UseHttpsRedirection();
@@ -88,8 +91,23 @@ try
 
     app.MapPost("/jobs/enqueue-and-wait", async (EnqueueJobRequest request, ISender sender, CancellationToken ct) =>
     {
+        // Test/demo convenience only: now that execution is queued via Hangfire (Phase 4),
+        // this polls for a terminal status instead of running inline. The real integration
+        // is POST /jobs (returns immediately) + GET /jobs/{id} or, later, SignalR (Phase 5).
         var id = await sender.Send(new EnqueueJobCommand(request.Type, request.Parameters ?? new Dictionary<string, string>()), ct);
-        var status = await sender.Send(new GetJobStatusQuery(id), ct);
+
+        JobStatusDto? status = null;
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(15);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            status = await sender.Send(new GetJobStatusQuery(id), ct);
+            if (status is { Status: JobStatus.Succeeded or JobStatus.Failed })
+            {
+                break;
+            }
+            await Task.Delay(200, ct);
+        }
+
         return Results.Ok(status);
     })
     .WithName("EnqueueJobAndWait");
